@@ -1,0 +1,27 @@
+target/
+*.class
+*.log
+*.ctxt
+.mtj.tmp/
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# IDEs and editors
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
+# Build tools and Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# System files
+.DS_Store
+Thumbs.db
