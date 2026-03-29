@@ -22,6 +22,8 @@ pipeline {
             post {
                 always {
                     stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
+                    // Apply full permissions to the target folder so it can be cleaned by the Master node
+                    sh 'chmod -R 777 target'
                 }
             }
         }
@@ -29,7 +31,7 @@ pipeline {
         stage('Reports') {
             agent any
             steps {
-                deleteDir() 
+                deleteDir()
                 unstash 'results'
                 allure results: [[path: 'target/allure-results']]
                 junit '**/target/surefire-reports/*.xml'
