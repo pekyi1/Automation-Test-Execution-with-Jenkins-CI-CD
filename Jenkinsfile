@@ -29,6 +29,7 @@ pipeline {
         stage('Reports') {
             agent any
             steps {
+                deleteDir() 
                 unstash 'results'
                 allure results: [[path: 'target/allure-results']]
                 junit '**/target/surefire-reports/*.xml'
@@ -42,12 +43,6 @@ pipeline {
                     reportName: 'API Test Reports'
                 ])
             }
-        }
-    }
-
-    post {
-        always {
-            cleanWs()
         }
     }
 }
