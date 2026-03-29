@@ -1,8 +1,9 @@
 pipeline {
-    agent any
-
-    environment {
-        MAVEN_HOME = '/usr/share/maven'
+    agent {
+        docker {
+            image 'maven:3.9.5-eclipse-temurin-17-alpine'
+            args '-u root' // Helps with directory permissions in Docker
+        }
     }
 
     stages {
