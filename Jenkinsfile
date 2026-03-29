@@ -22,8 +22,8 @@ pipeline {
             post {
                 always {
                     stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
-                    // Apply full permissions to the target folder so it can be cleaned by the Master node
-                    sh 'chmod -R 777 target'
+                    // Apply full permissions to the entire workspace so Jenkins can clean up root-owned files
+                    sh 'chmod -R 777 ${WORKSPACE}'
                 }
             }
         }
@@ -31,7 +31,8 @@ pipeline {
         stage('Reports') {
             agent any
             steps {
-                deleteDir()
+                // Clean workspace before unstashing (ignore errors from previous root-owned files)
+                sh 'rm -rf ${WORKSPACE}/* ${WORKSPACE}/.[!.]* 2>/dev/null || true'
                 unstash 'results'
                 allure results: [[path: 'target/allure-results']]
                 junit '**/target/surefire-reports/*.xml'
@@ -44,6 +45,12 @@ pipeline {
                     reportFiles: 'index.html',
                     reportName: 'API Test Reports'
                 ])
+            }
+            post {
+                always {
+                    // Fix permissions on everything (including allure-results/) so Jenkins can clean up
+                    sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
+                }
             }
         }
     }
