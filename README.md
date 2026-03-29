@@ -31,6 +31,7 @@ docker run api-automation-tests
 Install the following plugins from **Manage Jenkins > Plugins**:
 - `Git`
 - `Pipeline`
+- `Allure Jenkins Plugin` (for advanced test reporting)
 - `HTML Publisher` (for TestNG reports)
 - `JUnit` (for test result analysis)
 - `Slack Notification` (optional but recommended)

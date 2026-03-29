@@ -28,6 +28,9 @@ pipeline {
             }
             post {
                 always {
+                    // Generate Allure Report
+                    allure results: [[path: 'target/allure-results']]
+
                     // Archive JUnit-formatted test results
                     junit '**/target/surefire-reports/*.xml'
                     
@@ -47,7 +50,7 @@ pipeline {
         stage('Artifacts') {
             steps {
                 // Archive all results as build artifacts
-                archiveArtifacts artifacts: 'target/surefire-reports/**'
+                archiveArtifacts artifacts: 'target/allure-results/**, target/surefire-reports/**'
             }
         }
     }
