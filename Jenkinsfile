@@ -21,8 +21,13 @@ pipeline {
             }
             post {
                 always {
+                    // Copy any root-level allure-results into target/ as a fallback
+                    sh 'if [ -d allure-results ]; then mkdir -p target/allure-results && cp -r allure-results/* target/allure-results/; fi'
+                    // Debug: show what was generated
+                    sh 'echo "=== allure-results contents ===" && ls -la allure-results/ 2>/dev/null || echo "No root allure-results"'
+                    sh 'echo "=== target/allure-results contents ===" && ls -la target/allure-results/ 2>/dev/null || echo "No target/allure-results"'
                     stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
-                    // Apply full permissions to the entire workspace so Jenkins can clean up root-owned files
+                    // Apply full permissions so Jenkins can clean up root-owned files
                     sh 'chmod -R 777 ${WORKSPACE}'
                 }
             }
@@ -34,6 +39,8 @@ pipeline {
                 // Clean workspace before unstashing (ignore errors from previous root-owned files)
                 sh 'rm -rf ${WORKSPACE}/* ${WORKSPACE}/.[!.]* 2>/dev/null || true'
                 unstash 'results'
+                // Debug: verify unstashed files
+                sh 'echo "=== Unstashed allure-results ===" && find target/allure-results -type f 2>/dev/null | head -20 || echo "No allure results found"'
                 allure results: [[path: 'target/allure-results']]
                 junit '**/target/surefire-reports/*.xml'
                 
@@ -48,7 +55,7 @@ pipeline {
             }
             post {
                 always {
-                    // Fix permissions on everything (including allure-results/) so Jenkins can clean up
+                    // Fix permissions so Jenkins can clean up
                     sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
                 }
             }
