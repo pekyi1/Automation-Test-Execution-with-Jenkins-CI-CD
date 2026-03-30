@@ -10,7 +10,7 @@ This project demonstrates an automated API testing suite using **REST Assured** 
 - **`Dockerfile`**: Containerization setup to run tests inside a Docker environment.
 - **`Jenkinsfile`**: Declarative pipeline for automated CI/CD execution.
 
-## 🚀 How to Run Locally
+## 🚀 How to this Run Locally
 
 ### 1. Using Maven
 Ensure you have Java 17+ and Maven installed.
