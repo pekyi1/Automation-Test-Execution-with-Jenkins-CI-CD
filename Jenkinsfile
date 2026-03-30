@@ -55,18 +55,19 @@ pipeline {
                     env.TEST_FAILED = "${testResults.failCount}"
                     env.TEST_SKIPPED = "${testResults.skipCount}"
 
-                    // Extract failure reasons (Pure Groovy - no Python needed)
-                    def files = findFiles(glob: 'target/surefire-reports/TEST-*.xml')
+                    // Extract failure reasons using only built-in steps
+                    def fileList = sh(returnStdout: true, script: 'ls target/surefire-reports/TEST-*.xml 2>/dev/null || true').trim()
                     def failedItems = []
-                    for (file in files) {
-                        def content = readFile(file.path)
-                        // This regex finds the first failure message and the corresponding test name
-                        def matcher = (content =~ /<testcase name="([^"]*)"[^>]*>[\s\S]*?<failure message="([^"]*)"/)
-                        while (matcher.find()) {
-                            failedItems.add(" - ${matcher.group(1)}: ${matcher.group(2)}")
+                    if (fileList) {
+                        for (filePath in fileList.split('\n')) {
+                            def content = readFile(filePath.trim())
+                            def matcher = (content =~ /<testcase name="([^"]*)"[^>]*>[\s\S]*?<failure message="([^"]*)"/)
+                            while (matcher.find()) {
+                                failedItems.add(" - ${matcher.group(1)}: ${matcher.group(2)}")
+                            }
                         }
                     }
-                    env.TEST_FAILURE_LIST = failedItems.join("\n") ?: " - None (All tests passed)"
+                    env.TEST_FAILURE_LIST = failedItems ? failedItems.join("\n") : " - None (All tests passed)"
                 }
                 
                 publishHTML([
