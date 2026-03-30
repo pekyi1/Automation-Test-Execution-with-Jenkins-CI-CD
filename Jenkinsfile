@@ -47,13 +47,34 @@ pipeline {
                 unstash 'results'
                 allure results: [[path: 'target/allure-results']]
                 
-                // Capture test results (sandbox-safe - no rawBuild needed)
+                // Capture test counts and failures (sandbox-safe)
                 script {
                     def testResults = junit '**/target/surefire-reports/*.xml'
                     env.TEST_TOTAL = "${testResults.totalCount}"
                     env.TEST_PASSED = "${testResults.passCount}"
                     env.TEST_FAILED = "${testResults.failCount}"
                     env.TEST_SKIPPED = "${testResults.skipCount}"
+
+                    // Extract failure reasons (Porting logic from previous project)
+                    sh '''
+                    python3 - <<'PY'
+                    import glob, xml.etree.ElementTree as ET, os
+                    files = glob.glob("target/surefire-reports/TEST-*.xml")
+                    failed_items = []
+                    for fpath in files:
+                        root = ET.parse(fpath).getroot()
+                        for tc in root.findall("testcase"):
+                            name = tc.attrib.get("name", "unknown")
+                            failure = tc.find("failure")
+                            if failure is not None:
+                                msg = (failure.attrib.get("message") or "").strip().splitlines()[0]
+                                failed_items.append(f" - {name}: {msg}")
+                    with open("failures.txt", "w") as f:
+                        f.write("\\n".join(failed_items))
+                    PY
+                    '''
+                    def failures = readFile('failures.txt').trim()
+                    env.TEST_FAILURE_LIST = failures ?: " - None (All tests passed)"
                 }
                 
                 publishHTML([
@@ -74,6 +95,10 @@ pipeline {
                         def message = """*API Test Execution Summary [Build ${env.BUILD_NUMBER}]*
 Status: *${status}*
 Total Tests: *${env.TEST_TOTAL ?: '0'}* | Passed: *${env.TEST_PASSED ?: '0'}* | Failed: *${env.TEST_FAILED ?: '0'}* | Skipped: *${env.TEST_SKIPPED ?: '0'}*
+
+*Failed test(s) and why:*
+${env.TEST_FAILURE_LIST}
+
 Build URL: ${env.BUILD_URL}
 Allure Report: ${env.BUILD_URL}allure/"""
 
@@ -83,7 +108,7 @@ Allure Report: ${env.BUILD_URL}allure/"""
                         // Email Notification
                         emailext(
                             subject: "Jenkins Build ${status}: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                            body: message.replace('*', ''),
+                            body: message.replace('*', ''), // Strip markdown bold for email
                             recipientProviders: [culprits(), developers(), upstreamDevelopers()]
                         )
                     }
