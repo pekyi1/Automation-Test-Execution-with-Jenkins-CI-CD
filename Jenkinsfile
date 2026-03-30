@@ -1,5 +1,14 @@
 pipeline {
     agent none
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+
+    triggers {
+        githubPush()
+    }
 
     stages {
         stage('Checkout') {
@@ -23,9 +32,6 @@ pipeline {
                 always {
                     // Copy any root-level allure-results into target/ as a fallback
                     sh 'if [ -d allure-results ]; then mkdir -p target/allure-results && cp -r allure-results/* target/allure-results/; fi'
-                    // Debug: show what was generated
-                    sh 'echo "=== allure-results contents ===" && ls -la allure-results/ 2>/dev/null || echo "No root allure-results"'
-                    sh 'echo "=== target/allure-results contents ===" && ls -la target/allure-results/ 2>/dev/null || echo "No target/allure-results"'
                     stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
                     // Apply full permissions so Jenkins can clean up root-owned files
                     sh 'chmod -R 777 ${WORKSPACE}'
@@ -39,8 +45,6 @@ pipeline {
                 // Clean workspace before unstashing (ignore errors from previous root-owned files)
                 sh 'rm -rf ${WORKSPACE}/* ${WORKSPACE}/.[!.]* 2>/dev/null || true'
                 unstash 'results'
-                // Debug: verify unstashed files
-                sh 'echo "=== Unstashed allure-results ===" && find target/allure-results -type f 2>/dev/null | head -20 || echo "No allure results found"'
                 allure results: [[path: 'target/allure-results']]
                 junit '**/target/surefire-reports/*.xml'
                 
@@ -58,6 +62,43 @@ pipeline {
                     // Fix permissions so Jenkins can clean up
                     sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
                 }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Fetch test summary from the build's test result action
+                def testResult = currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class)
+                def total = 0, passed = 0, failed = 0, skipped = 0
+                
+                if (testResult != null) {
+                    total = testResult.totalCount
+                    passed = testResult.passCount
+                    failed = testResult.failCount
+                    skipped = testResult.skipCount
+                }
+
+                def status = currentBuild.result ?: 'SUCCESS'
+                def color = (status == 'SUCCESS') ? 'good' : (status == 'UNSTABLE' ? 'warning' : 'danger')
+                
+                def message = """*API Test Execution Summary [Build ${env.BUILD_NUMBER}]*
+Status: *${status}*
+Total Tests: *${total}* | Passed: *${passed}* | Failed: *${failed}* | Skipped: *${skipped}*
+Repo: `${env.GIT_URL}` | Branch: `${env.BRANCH_NAME ?: 'main'}`
+Build URL: ${env.RUN_DISPLAY_URL ?: env.BUILD_URL}
+Allure Report: ${env.BUILD_URL}allure/"""
+
+                // Slack Notification
+                slackSend(color: color, message: message)
+
+                // Email Notification
+                emailext(
+                    subject: "Jenkins Build ${status}: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                    body: message.replace('*', ''), 
+                    recipientProviders: [culprits(), developers(), upstreamDevelopers()]
+                )
             }
         }
     }
