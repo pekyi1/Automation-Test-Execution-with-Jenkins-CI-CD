@@ -46,7 +46,15 @@ pipeline {
                 sh 'rm -rf ${WORKSPACE}/* ${WORKSPACE}/.[!.]* 2>/dev/null || true'
                 unstash 'results'
                 allure results: [[path: 'target/allure-results']]
-                junit '**/target/surefire-reports/*.xml'
+                
+                // Capture test results (sandbox-safe - no rawBuild needed)
+                script {
+                    def testResults = junit '**/target/surefire-reports/*.xml'
+                    env.TEST_TOTAL = "${testResults.totalCount}"
+                    env.TEST_PASSED = "${testResults.passCount}"
+                    env.TEST_FAILED = "${testResults.failCount}"
+                    env.TEST_SKIPPED = "${testResults.skipCount}"
+                }
                 
                 publishHTML([
                     allowMissing: false,
@@ -59,46 +67,29 @@ pipeline {
             }
             post {
                 always {
+                    script {
+                        def status = currentBuild.currentResult ?: 'SUCCESS'
+                        def color = (status == 'SUCCESS') ? 'good' : (status == 'UNSTABLE' ? 'warning' : 'danger')
+                        
+                        def message = """*API Test Execution Summary [Build ${env.BUILD_NUMBER}]*
+Status: *${status}*
+Total Tests: *${env.TEST_TOTAL ?: '0'}* | Passed: *${env.TEST_PASSED ?: '0'}* | Failed: *${env.TEST_FAILED ?: '0'}* | Skipped: *${env.TEST_SKIPPED ?: '0'}*
+Build URL: ${env.BUILD_URL}
+Allure Report: ${env.BUILD_URL}allure/"""
+
+                        // Slack Notification
+                        slackSend(color: color, message: message)
+
+                        // Email Notification
+                        emailext(
+                            subject: "Jenkins Build ${status}: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                            body: message.replace('*', ''),
+                            recipientProviders: [culprits(), developers(), upstreamDevelopers()]
+                        )
+                    }
                     // Fix permissions so Jenkins can clean up
                     sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
                 }
-            }
-        }
-    }
-
-    post {
-        always {
-            script {
-                // Fetch test summary from the build's test result action
-                def testResult = currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class)
-                def total = 0, passed = 0, failed = 0, skipped = 0
-                
-                if (testResult != null) {
-                    total = testResult.totalCount
-                    passed = testResult.passCount
-                    failed = testResult.failCount
-                    skipped = testResult.skipCount
-                }
-
-                def status = currentBuild.result ?: 'SUCCESS'
-                def color = (status == 'SUCCESS') ? 'good' : (status == 'UNSTABLE' ? 'warning' : 'danger')
-                
-                def message = """*API Test Execution Summary [Build ${env.BUILD_NUMBER}]*
-Status: *${status}*
-Total Tests: *${total}* | Passed: *${passed}* | Failed: *${failed}* | Skipped: *${skipped}*
-Repo: `${env.GIT_URL}` | Branch: `${env.BRANCH_NAME ?: 'main'}`
-Build URL: ${env.RUN_DISPLAY_URL ?: env.BUILD_URL}
-Allure Report: ${env.BUILD_URL}allure/"""
-
-                // Slack Notification
-                slackSend(color: color, message: message)
-
-                // Email Notification
-                emailext(
-                    subject: "Jenkins Build ${status}: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                    body: message.replace('*', ''), 
-                    recipientProviders: [culprits(), developers(), upstreamDevelopers()]
-                )
             }
         }
     }
