@@ -55,26 +55,18 @@ pipeline {
                     env.TEST_FAILED = "${testResults.failCount}"
                     env.TEST_SKIPPED = "${testResults.skipCount}"
 
-                    // Extract failure reasons (Porting logic from previous project)
-                    sh '''
-                    python3 - <<'PY'
-                    import glob, xml.etree.ElementTree as ET, os
-                    files = glob.glob("target/surefire-reports/TEST-*.xml")
-                    failed_items = []
-                    for fpath in files:
-                        root = ET.parse(fpath).getroot()
-                        for tc in root.findall("testcase"):
-                            name = tc.attrib.get("name", "unknown")
-                            failure = tc.find("failure")
-                            if failure is not None:
-                                msg = (failure.attrib.get("message") or "").strip().splitlines()[0]
-                                failed_items.append(f" - {name}: {msg}")
-                    with open("failures.txt", "w") as f:
-                        f.write("\\n".join(failed_items))
-                    PY
-                    '''
-                    def failures = readFile('failures.txt').trim()
-                    env.TEST_FAILURE_LIST = failures ?: " - None (All tests passed)"
+                    // Extract failure reasons (Pure Groovy - no Python needed)
+                    def files = findFiles(glob: 'target/surefire-reports/TEST-*.xml')
+                    def failedItems = []
+                    for (file in files) {
+                        def content = readFile(file.path)
+                        // This regex finds the first failure message and the corresponding test name
+                        def matcher = (content =~ /<testcase name="([^"]*)"[^>]*>[\s\S]*?<failure message="([^"]*)"/)
+                        while (matcher.find()) {
+                            failedItems.add(" - ${matcher.group(1)}: ${matcher.group(2)}")
+                        }
+                    }
+                    env.TEST_FAILURE_LIST = failedItems.join("\n") ?: " - None (All tests passed)"
                 }
                 
                 publishHTML([
