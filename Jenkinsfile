@@ -26,7 +26,7 @@ pipeline {
                 }
             }
             steps {
-                sh 'mvn clean test'
+                sh 'mvn clean test -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.wagon.httpconnectionManager.ttlSeconds=120'
             }
             post {
                 always {
