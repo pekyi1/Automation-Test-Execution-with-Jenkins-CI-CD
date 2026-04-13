@@ -6,6 +6,10 @@ pipeline {
         disableConcurrentBuilds()
     }
 
+    environment {
+        ALLURE_REPORT_URL = 'https://pekyi1.github.io/Automation-Test-Execution-with-Jenkins-CI-CD/'
+    }
+
     triggers {
         githubPush()
     }
@@ -61,7 +65,7 @@ pipeline {
                     if (fileList) {
                         for (filePath in fileList.split('\n')) {
                             def content = readFile(filePath.trim())
-                            def matcher = (content =~ /<testcase name="([^"]*)"[^>]*>[\s\S]*?<failure message="([^"]*)"/)
+                            def matcher = (content =~ /<testcase name="([^"]*)"[^>]*>[\s\S]*?<failure message="([^"]*)"/  )
                             while (matcher.find()) {
                                 failedItems.add(" - ${matcher.group(1)}: ${matcher.group(2)}")
                             }
@@ -78,6 +82,29 @@ pipeline {
                     reportFiles: 'index.html',
                     reportName: 'API Test Reports'
                 ])
+
+                // Deploy the Allure report to GitHub Pages (gh-pages branch)
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                        # Clone gh-pages branch if it exists, otherwise create it
+                        git clone --branch gh-pages --single-branch \
+                            https://${GITHUB_TOKEN}@github.com/pekyi1/Automation-Test-Execution-with-Jenkins-CI-CD.git \
+                            gh-pages-deploy 2>/dev/null || \
+                        (mkdir gh-pages-deploy && cd gh-pages-deploy && git init && git checkout -b gh-pages)
+
+                        # Replace old report with the new one
+                        rm -rf gh-pages-deploy/*
+                        cp -r allure-report/* gh-pages-deploy/
+
+                        # Commit and force-push
+                        cd gh-pages-deploy
+                        git config user.email "jenkins@ci.local"
+                        git config user.name "Jenkins CI"
+                        git add .
+                        git commit -m "Allure Report - Build ${BUILD_NUMBER}" --allow-empty
+                        git push -f https://${GITHUB_TOKEN}@github.com/pekyi1/Automation-Test-Execution-with-Jenkins-CI-CD.git gh-pages
+                    '''
+                }
             }
             post {
                 always {
@@ -93,7 +120,7 @@ Total Tests: *${env.TEST_TOTAL ?: '0'}* | Passed: *${env.TEST_PASSED ?: '0'}* | 
 ${env.TEST_FAILURE_LIST}
 
 Build URL: ${env.BUILD_URL}
-Allure Report: ${env.BUILD_URL}allure/"""
+Allure Report: ${env.ALLURE_REPORT_URL}"""
 
                         // Slack Notification
                         slackSend(color: color, message: message)
