@@ -102,7 +102,8 @@ Allure Report: ${env.BUILD_URL}allure/"""
                         emailext(
                             subject: "Jenkins Build ${status}: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
                             body: message.replace('*', ''), // Strip markdown bold for email
-                            recipientProviders: [culprits(), developers(), upstreamDevelopers()]
+                            to: 'fred.pekyi@amalitech.com',
+                            recipientProviders: [requestor(), culprits(), developers(), upstreamDevelopers()]
                         )
                     }
                     // Fix permissions so Jenkins can clean up
